@@ -7,6 +7,9 @@ import { LucidDeviceCommandRepository } from '#infrastructure/persistence/reposi
 import { LucidVehicleStateReader } from '#infrastructure/persistence/readers/vehicle_state_reader'
 import { RequestImmobilization } from '#application/security/use_cases/request_immobilization'
 import { ValidateImmobilization } from '#application/security/use_cases/validate_immobilization'
+import { IngestPositionUseCase } from '#application/telemetry/use_cases/ingest_position'
+import { LucidPositionRepository } from '#infrastructure/persistence/repositories/position_repository'
+import { FlespiMqttClient } from '#infrastructure/gateways/flespi_mqtt_client'
 import sisbmConfig from '#config/sisbm'
 
 /**
@@ -31,6 +34,8 @@ import sisbmConfig from '#config/sisbm'
  */
 export default class ContainerProvider {
   constructor(protected app: ApplicationService) {}
+
+  private flespiClient: FlespiMqttClient | null = null
 
   register() {
     const immo = sisbmConfig.immobilization
@@ -63,10 +68,45 @@ export default class ContainerProvider {
         immo.maxPositionAgeSeconds
       )
     })
+
+    // ------------------------------------------------------------- télémetrie
+    this.app.container.singleton(IngestPositionUseCase, () => {
+      return new IngestPositionUseCase(new LucidPositionRepository())
+    })
+
+    // Client MQTT Flespi — démarré au boot si un token est configuré.
+    const flespi = sisbmConfig.flespi
+    if (flespi.token) {
+      this.flespiClient = new FlespiMqttClient(
+        {
+          host: flespi.mqttHost,
+          port: flespi.mqttPort,
+          tls: flespi.mqttTls,
+          token: flespi.token,
+          clientId: flespi.clientId,
+        },
+        new IngestPositionUseCase(new LucidPositionRepository())
+      )
+    }
   }
 
   async boot() {}
-  async start() {}
+
+  async start() {
+    if (this.flespiClient) {
+      try {
+        await this.flespiClient.connect()
+      } catch (err) {
+        console.error('[flespi-mqtt] échec de connexion au démarrage', err)
+      }
+    }
+  }
+
   async ready() {}
-  async shutdown() {}
+
+  async shutdown() {
+    if (this.flespiClient) {
+      await this.flespiClient.disconnect()
+    }
+  }
 }

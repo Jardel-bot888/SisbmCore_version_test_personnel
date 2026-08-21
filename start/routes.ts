@@ -5,6 +5,8 @@ import { throttle } from '#start/limiter'
 const AuthController = () => import('#presentation/http/controllers/identity/auth_controller')
 const ImmobilizationController = () =>
   import('#presentation/http/controllers/security/immobilization_controller')
+const TelemetryController = () =>
+  import('#presentation/http/controllers/telemetry/telemetry_controller')
 
 /**
  * Routage de l'API.
@@ -40,6 +42,14 @@ router
       // Débit volontairement bas : une coupure moteur n'est jamais une
       // opération de masse. Un pic de requêtes ici est un signal d'alerte.
       .use(throttle.sensitive)
+
+    // ---- Télémétrie : lecture seule (supervision de la flotte)
+    router
+      .group(() => {
+        router.get('/vehicles', [TelemetryController, 'vehicles'])
+        router.get('/vehicles/:id/positions', [TelemetryController, 'positions'])
+      })
+      .prefix('/telemetry')
   })
   .prefix('/api/v1')
   .use(middleware.auth())
