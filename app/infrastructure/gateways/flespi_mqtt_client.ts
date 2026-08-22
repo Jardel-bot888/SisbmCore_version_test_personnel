@@ -85,13 +85,13 @@ export class FlespiMqttClient {
       this.client.on('connect', () => {
         console.log('[flespi-mqtt] connecté à', url)
 
-        // S'abonner à TOUS les topics pour diagnostiquer le flux Trackbox
-        this.client!.subscribe('#', (err) => {
+        // S'abonner au topic Trackbox : devices/ingest/{ident}
+        this.client!.subscribe('devices/ingest/+', (err) => {
           if (err) {
             console.error('[flespi-mqtt] échec abonnement', err)
             reject(err)
           } else {
-            console.log('[flespi-mqtt] abonné à # (tous les topics)')
+            console.log('[flespi-mqtt] abonné à devices/ingest/+')
             resolve()
           }
         })
@@ -140,9 +140,11 @@ export class FlespiMqttClient {
       return
     }
 
-    const ident = raw.ident
+    // L'identifiant peut être dans le payload (champ 'ident') OU dans le topic
+    // (dernier segment après le dernier '/'). Trackbox le met dans le topic.
+    const ident: string = raw.ident ?? topic.split('/').pop() ?? ''
     if (!ident) {
-      console.warn('[flespi-mqtt] message sans ident, ignoré')
+      console.warn('[flespi-mqtt] message sans ident (ni payload ni topic), ignoré')
       return
     }
 
