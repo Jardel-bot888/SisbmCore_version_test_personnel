@@ -284,3 +284,57 @@ client.on("message", (topic, msg) => { console.log(topic, msg.toString()) })
 - APIBox interactive : https://flespi.io/docs/
 - Video integration : https://youtu.be/nB2NVsyEfok
 
+
+
+---
+
+## 7. Découverte importante — Commands Micodus non testables
+
+### 7.1. Comportement observé après activation du scope `commands`
+
+Le scope `commands` est maintenant actif (l ACL est passee), mais Flespi refuse systematiquement la commande avec :
+```
+"command engine.relay properties validation failed: command definition engine.relay is not found"
+```
+
+### 7.2. Cause racine
+
+Sur ce compte Flespi, **aucun device_type compatible Micodus nest enregistre**. Les types testes (350-359, 360-400) acceptent bien la configuration `{ident: IMEI}` mais **n ont aucune definition de commande engine.relay** dans leur schema.
+
+Le `device_type_id=325` (qui correspondrait au protocol micodus) refuse meme la creation : `"device type 325 not found"`.
+
+### 7.3. Conclusion
+
+Pour tester les commandes de coupure moteur :
+- Soit il faut un **vrai traceur Micodus MV730** physiquement connecte au channel 1437503
+- Soit il faut utiliser le **simulateur officiel Flespi** (https://flespi.io/kb) qui injecte les definitions automatiquement
+- Soit recuperer le `device_type_id` exact via le panel Flespi (interface graphique)
+
+### 7.4. Endpoint valide meme sans commande supportee
+
+```
+POST https://flespi.io/gw/devices/{id}/commands
+Authorization: FlespiToken {TOKEN}
+Content-Type: application/json
+
+[{
+  "name": "<command_name>",
+  "properties": { ... }
+}]
+```
+
+Le **format** `{name, properties}` est **confirme correct** (l erreur nest plus ACL mais validation metier). Pour trouver le bon `command_name`, il faut le panel Flespi ou la doc officielle.
+
+---
+
+## 8. Tests effectues a ce stade
+
+| Date | Test | Resultat |
+|------|------|----------|
+| 24/08 matin | GET /gw/channels/all | OK - 1 channel micodus |
+| 24/08 matin | POST /gw/devices (dt=350) | OK - device cree |
+| 24/08 matin | DELETE /gw/devices/{id} | OK (apres ajout scope) |
+| 24/08 matin | MQTT subscribe 5 topics | OK - tous recois payloads |
+| 24/08 matin | POST /gw/devices/{id}/commands (scope ON) | Format OK, mais command inconnue |
+| 24/08 matin | Scan device_type 100-600 pour engine.relay | Aucun type compatible trouve |
+
