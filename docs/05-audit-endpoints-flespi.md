@@ -338,3 +338,110 @@ Le **format** `{name, properties}` est **confirme correct** (l erreur nest plus 
 | 24/08 matin | POST /gw/devices/{id}/commands (scope ON) | Format OK, mais command inconnue |
 | 24/08 matin | Scan device_type 100-600 pour engine.relay | Aucun type compatible trouve |
 
+
+
+---
+
+## 10. Commande custom Micodus MV730 (VALIDEE)
+
+### 10.1. Format de commande
+
+Le protocole Micodus sur Flespi utilise une **commande personnalisee** (`name: "custom"`) avec un champ `payload` contenant la commande brute Micodus (syntaxe `RELAY,N#`).
+
+### 10.2. Couper le moteur
+
+```
+POST https://flespi.io/gw/devices/{id}/commands
+Authorization: FlespiToken {TOKEN}
+Content-Type: application/json
+
+[{
+  "name": "custom",
+  "properties": {
+    "payload": "RELAY,1#"
+  }
+}]
+```
+
+### 10.3. Retablir le moteur
+
+```
+POST https://flespi.io/gw/devices/{id}/commands
+Authorization: FlespiToken {TOKEN}
+Content-Type: application/json
+
+[{
+  "name": "custom",
+  "properties": {
+    "payload": "RELAY,0#"
+  }
+}]
+```
+
+### 10.4. Reponse Flespi (test 24/08/2026)
+
+Commande `RELAY,1#` envoyee sur device 8915594 :
+```json
+{
+  "result": [],
+  "errors": [{
+    "code": 2,
+    "id": 1788474092687786,
+    "reason": "failed to deliver command custom with timeout pending, device with id 8915594 is not connected"
+  }]
+}
+```
+
+Interpretation :
+- L erreur nest **plus une erreur de validation** ni d ACL : le format est accepte par Flespi
+- Le `code 2` + `reason not connected` signifie que **Flespi a tente de transmettre la commande** au traceur, mais le device na pas repondu (simulateur Trackbox ne fait que publier des positions, il ne recoit pas les commandes)
+- Pour valider en condition reelle, un **vrai traceur Micodus MV730** doit etre connecte au channel TCP `ch1437503.flespi.gw:38499`
+
+### 10.5. Champs `payload` testes (rejetes)
+
+| Champ | Format | Resultat |
+|-------|--------|----------|
+| `text` | `RELAY,1#` | FAIL : properties validation |
+| `data.text` | `RELAY,1#` | FAIL : properties validation |
+| `payload` | `RELAY,1#` | **OK** : commande envoyee |
+| `body` | `RELAY,1#` | FAIL : properties validation |
+| `message` | `RELAY,1#` | FAIL : properties validation |
+
+**Le bon champ est `payload`**.
+
+### 10.6. Noms de commande testes (rejetes)
+
+| Name | Resultat |
+|------|----------|
+| `engine.relay` | FAIL : command definition not found |
+| `output.relay` | FAIL : command definition not found |
+| `text` | FAIL : command definition not found |
+| `command` | FAIL : command definition not found |
+| `send` | FAIL : command definition not found |
+| `output` | FAIL : command definition not found |
+| **`custom`** | **OK** : commande envoyee |
+
+**Le bon nom est `custom`**.
+
+---
+
+## 11. Recapitulatif final de laudit
+
+| Bloc | Statut |
+|------|--------|
+| Channel micodus | OK - id 1437503, uri ch1437503.flespi.gw:38499 |
+| Devices CRUD | OK - 0 a 10 devices testes, scope delete actif |
+| Messages | OK - endpoint valide, format documente |
+| Telemetry | OK - endpoint valide (404 sans donnees) |
+| **Commandes Micodus** | **OK - format custom valide** |
+| MQTT 5 topics | OK - tous abonnements reussis |
+| Token scopes | OK - read, write, delete, commands |
+
+### Pour Evans (Jalon 2)
+
+1. **Utiliser** `{name: "custom", properties: {payload: "RELAY,1#"}}` pour couper
+2. **Utiliser** `{name: "custom", properties: {payload: "RELAY,0#"}}` pour retablir
+3. **Tester en reel** avec un vrai MV730 branche sur le channel TCP
+4. Le **device Flespi** doit etre cree avec `device_type_id=350` et `configuration.ident=IMEI`
+5. Le **topic MQTT** peut etre soit `flespi/message/gw/channels/{id}` (officiel) soit `devices/ingest/+` (Trackbox custom)
+
