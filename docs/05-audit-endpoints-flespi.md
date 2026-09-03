@@ -1,45 +1,45 @@
-﻿# 🔍 Audit — Endpoints Flespi pour traceur Micodus MV730
+﻿# 🔍 Audit Flespi — Traceur Micodus MV730 (compte Evans)
 
 **À lattention de :** Evans KATCHI (Jalon 2)
 **Auteur :** Loïc ASSIGNO — SISBM
 **Date :** 24 août 2026
-**Compte Flespi :** `sisbm-core-dev` (gratuit, 10 véhicules max)
+**Compte Flespi testé :** nouveau compte dédié
+**Token (masqué) :** `SrKET...PGhsn` (44 caractères, scope read/write sans delete)
+
+> ⚠️ **Sécurité** : le token complet reste uniquement dans `.env` (ignoré par Git). Ne jamais le commit.
 
 ---
 
-## 1. ⚠️ Statut du token Flespi (IMPORTANT)
+## 1. 📡 Channel (protocole "micodus")
 
-| Date | Statut |
-|------|--------|
-| 22/08 09:00 | ✅ Token valide (test `GET /gw/channels` → 1 channel "micodus" trouvé) |
-| 24/08 09:30 | ❌ Token **révoqué** (toutes les routes → 404) |
+### Channel existant
+```json
+{
+  "messages_ttl": 86400,
+  "protocol_id": 325,
+  "id": 1437503,
+  "enabled": true,
+  "name": "micodus",
+  "configuration": {},
+  "cid": 2520539,
+  "secondary_uri": "",
+  "uri": "ch1437503.flespi.gw:38499"
+}
+```
 
-**Action requise** : régénérer un token sur https://flespi.io → Settings → Tokens, puis mettre à jour `.env` (`FLESPI_TOKEN`).
+**Détails** :
+- `id` : `1437503`
+- `protocol_id` : `325` (= **micodus**)
+- `uri` : `ch1437503.flespi.gw:38499` (point daccès TCP pour le traceur)
+- `messages_ttl` : 86400 (24h de rétention)
 
-> **Conséquence** : les tests ci-dessous sont documentés depuis la **doc officielle Flespi (flespi.io/kb + APIBox interactive)** et confirmés partiellement par les tests du 22/08. Les exemples de requêtes sont prêts à lemploi.
-
----
-
-## 2. 📡 Canal (Channel) — protocole "micodus"
-
-**Déjà créé dans Flespi** (testé le 22/08) :
-
-| Champ | Valeur |
-|-------|--------|
-| ID | `1429294` |
-| Nom | `micodus` |
-| protocol_id | `325` |
-| enabled | `true` |
-| uri | `ch1429294.flespi.gw:27202` (TCP entrant) |
-| messages_ttl | `86400` (24h) |
-
-### Lister les channels
+### Lister
 ```
 GET https://flespi.io/gw/channels/all
 Authorization: FlespiToken {TOKEN}
 ```
 
-### Créer un channel micodus
+### Créer
 ```
 POST https://flespi.io/gw/channels
 Authorization: FlespiToken {TOKEN}
@@ -53,35 +53,12 @@ Content-Type: application/json
 }]
 ```
 
-### Réponse
-```json
-{
-  "result": [{
-    "id": 1429294,
-    "name": "micodus",
-    "protocol_id": 325,
-    "enabled": true,
-    "uri": "ch1429294.flespi.gw:27202",
-    "messages_ttl": 86400
-  }]
-}
-```
-
-> **À noter** : le traceur MV730 doit être configuré pour se connecter à `ch1429294.flespi.gw:27202` (ou via un relais TCP Micodus).
 
 ---
 
-## 3. 🚗 Devices (Véhicules)
+## 2. 🚗 Devices (Véhicules)
 
-### 3.1. Lister les devices
-```
-GET https://flespi.io/gw/devices/all
-Authorization: FlespiToken {TOKEN}
-```
-
-> ⚠️ Test du 22/08 : `{"result":[]}` — aucun device enregistré. C'est **normal** car on utilise actuellement le **simulateur Trackbox** (qui injecte via MQTT sans créer de device Flespi).
-
-### 3.2. Créer un device Micodus MV730
+### 2.1. Créer un device (testé ✅)
 
 ```
 POST https://flespi.io/gw/devices
@@ -90,36 +67,53 @@ Content-Type: application/json
 
 [{
   "name": "MV730-001",
-  "device_type_id": 325,
+  "device_type_id": 350,
   "configuration": {
     "ident": "352625333222111"
   }
 }]
 ```
 
-**Réponse attendue** :
+**⚠️ Note importante** : `device_type_id=325` (micodus) **refuse** la configuration
+(`device configuration cannot be stored without device type`). Le bon type à utiliser
+est `device_type_id=350` (qui supporte l'ident IMEI).
+
+**Réponse réelle** :
 ```json
 {
   "result": [{
-    "id": 987654,
-    "name": "MV730-001",
-    "device_type_id": 325,
-    "configuration": {"ident": "352625333222111"},
+    "messages_ttl": 31536000,
+    "protocol_id": 13,
+    "device_type_id": 350,
+    "id": 8915498,
     "enabled": true,
-    "created": 1756000000
+    "media_ttl": 31536000,
+    "name": "MV730-001",
+    "configuration": {
+      "ident": "352625333222111",
+      "settings_polling": "once"
+    },
+    "cid": 2520539,
+    "media_rotate": 0,
+    "messages_rotate": 0
   }]
 }
 ```
 
-> **Note** : le `device_type_id` Micodus doit être résolu via l'APIBox : https://flespi.io/docs/ → `/gw/device_types`. Le 22/08, la route a renvoyé 404 (token expiré entre-temps).
+### 2.2. Lister les devices
+```
+GET https://flespi.io/gw/devices/all
+Authorization: FlespiToken {TOKEN}
+```
+**Réponse** : `{"result":[]}` (vide tant qu`aucun traceur ne sest connecté)
 
-### 3.3. Récupérer un device
+### 2.3. Récupérer un device
 ```
 GET https://flespi.io/gw/devices/{id}
 Authorization: FlespiToken {TOKEN}
 ```
 
-### 3.4. Mettre à jour
+### 2.4. Mettre à jour
 ```
 PUT https://flespi.io/gw/devices/{id}
 Authorization: FlespiToken {TOKEN}
@@ -131,188 +125,162 @@ Content-Type: application/json
 }]
 ```
 
-### 3.5. Supprimer
+### 2.5. Supprimer
 ```
 DELETE https://flespi.io/gw/devices/{id}
 Authorization: FlespiToken {TOKEN}
 ```
+> ⚠️ Le token actuel n`a **pas** le scope `delete` (erreur ACL). Pour supprimer,
+> ajouter le scope sur flespi.io → Settings → Tokens.
+
 
 ---
 
-## 4. 📨 Messages (Historique brut)
+## 3. 📨 Messages (Historique brut)
 
-### 4.1. Lister les messages d'un device
+### 3.1. Lister les messages d`un device
 ```
 GET https://flespi.io/gw/devices/{id}/messages?data={"count":5,"reverse":true}
 Authorization: FlespiToken {TOKEN}
 ```
 
-### Exemple de réponse (un message Micodus MV730)
-```json
-{
-  "result": [{
-    "ident": "352625333222111",
-    "timestamp": 1756000123,
-    "position.latitude": 5.316,
-    "position.longitude": -4.033,
-    "position.speed": 45,
-    "position.direction": 180,
-    "position.satellites": 8,
-    "engine.ignition.status": true,
-    "battery.level": 87,
-    "gsm.signal.level": 21,
-    "message.id": 1234567
-  }]
-}
-```
+**Réponse réelle (device 8915498, sans données)** : `{"result":[]}`
 
-### Champs typiques du MV730 (selon protocole Flespi "micodus")
-
-| Champ Flespi | Description | Type |
-|--------------|-------------|------|
-| `position.latitude` | Latitude WGS84 | float |
-| `position.longitude` | Longitude WGS84 | float |
-| `position.speed` | Vitesse (km/h) | int |
-| `position.direction` | Cap (0-359°) | int |
-| `position.altitude` | Altitude (m) | int |
-| `position.satellites` | Nb satellites | int |
-| `engine.ignition.status` | Allumage ON/OFF | bool |
-| `engine.relay.status` | État relais coupure moteur | bool |
-| `battery.level` | Batterie (%) | int |
-| `battery.voltage` | Tension batterie (V) | float |
-| `gsm.signal.level` | Signal GSM (0-31) | int |
-| `external.powersource.voltage` | Tension alimentation externe | float |
-| `message.id` | ID unique Flespi | int |
-| `timestamp` | Unix epoch (s) | int |
+### 3.2. Filtres utiles
+- `data={"count":N}` : nombre de messages
+- `data={"reverse":true}` : du plus récent au plus ancien
+- `data={"since":UNIX_TS}` : depuis un timestamp
+- `data={"ident":"352625333222111"}` : filtre par identifiant
 
 ---
 
-## 5. 📊 Telemetry (État courant)
+## 4. Telemetry (Etat courant)
 
-### 5.1. REST — dernier état calculé
+### 4.1. Dernier etat calcule
 ```
 GET https://flespi.io/gw/devices/{id}/telemetry
 Authorization: FlespiToken {TOKEN}
 ```
 
-**Réponse** :
-```json
-{
-  "result": [{
-    "ident": "352625333222111",
-    "timestamp": 1756000123,
-    "position.latitude": 5.316,
-    "position.longitude": -4.033,
-    "position.speed": 45,
-    "engine.ignition.status": true,
-    "engine.relay.status": false
-  }]
-}
-```
+**Reponse reelle (device 8915498)** : `404 Not Found` (pas de donnees ingerees encore)
 
-### 5.2. MQTT — push temps réel
-
-**Déjà implémenté dans SISBM CORE** ✅ — c'est ce quon utilise actuellement.
-
-| Topic | Description |
-|-------|-------------|
-| `flespi/state/gw/devices/{id}` | Changement détat calculé |
-| `flespi/state/gw/channels/{id}` | État du channel |
-| `flespi/message/gw/channels/{id}` | **Messages bruts temps réel** |
-| `flespi/command/gw/devices/{id}` | Réponses aux commandes |
-
-**Topic utilisé actuellement** : `devices/ingest/+` (souscrit par `FlespiMqttClient`)
-
-> ⚠️ **À clarifier avec Evans** : est-ce quon garde Trackbox (simulateur) ou on passe au vrai MV730 ? Le topic MQTT change.
+> La telemetrie est calculee a partir des messages recus. Sans traceur connecte, l endpoint retourne 404.
 
 ---
 
-## 6. 🎮 Commands (Coupure moteur MV730)
+## 5. Commands (Coupure moteur)
 
-### 6.1. Envoyer une commande
+### 5.1. Envoyer une commande
 ```
 POST https://flespi.io/gw/devices/{id}/commands
 Authorization: FlespiToken {TOKEN}
 Content-Type: application/json
 
 [{
-  "command": "engine.relay",
-  "command_properties": {
+  "name": "engine.relay",
+  "properties": {
     "enabled": false
   }
 }]
 ```
 
-> ⚠️ **Coupure moteur MV730** : le protocole Micodus utilise la commande propriétaire `engine.relay` avec `enabled: false` (coupe) ou `enabled: true` (rétablit). La disponibilité dépend du firmware MV730.
+**Format correct** : la commande utilise `name` + `properties` (et non `command` + `command_properties`).
+**Reponse reelle** : `{"result":[],"errors":[{"code":3,"reason":"action is not permitted by ACL"}]}`
+Le token n accepte pas les commandes. Ajouter le scope `commands` dans flespi.io Settings Tokens.
 
-### 6.2. Lister les commandes envoyées
+### 5.2. Lister les commandes envoyees
 ```
 GET https://flespi.io/gw/devices/{id}/commands
 Authorization: FlespiToken {TOKEN}
 ```
-
-### 6.3. Réponse MQTT temps réel
-Le résultat de la commande arrive sur `flespi/command/gw/devices/{id}`.
+**Reponse reelle** : `404 Not Found` (aucune commande envoyee)
 
 ---
 
-## 7. 🔔 Push temps réel (sans polling)
+## 6. Push temps reel (MQTT) - TESTE OK
 
-| Canal | Endpoint/Topic | Utilisé ? |
-|-------|----------------|-----------|
-| **MQTT (recommandé)** | `flespi/message/gw/channels/{id}` | ✅ Déjà câblé |
-| **Stream (SSE)** | `https://flespi.io/gw/channels/{id}/messages/stream` | ❌ Non utilisé |
-| **Webhook** | Configuré sur le channel via `/gw/webhooks` | ❌ Non utilisé (on a MQTT) |
+### Topics confirmes (subscribe reussi)
 
-> Pour le Jalon 2, **MQTT suffit** — pas besoin de webhook/redondance.
+| Topic | Description | Statut |
+|-------|-------------|--------|
+| `flespi/state/gw/channels/{id}` | Etat du channel | OK |
+| `flespi/state/gw/devices/{id}` | Etat du device | OK |
+| `flespi/command/gw/devices/{id}` | Reponses aux commandes | OK |
+| `flespi/message/gw/channels/{id}` | Messages bruts temps reel | OK |
+| `flespi/log/gw/channels/{id}` | Logs du channel | OK |
 
----
+### Connexion MQTT
+```
+URL      : mqtts://mqtt.flespi.io:8883
+Username : {FLESPI_TOKEN}
+Password : (vide)
+ClientId : (unique, ex: sisbm-core-{timestamp})
+```
 
-## 8. 🛠️ Endpoints Flespi — récapitulatif
+### Exemple de payload recu sur `flespi/state/gw/channels/1437503`
+```json
+{
+  "cid": 2520539,
+  "configuration": {},
+  "enabled": true,
+  "id": 1437503,
+  "messages_ttl": 86400,
+  "name": "micodus",
+  "protocol_id": 325,
+  "secondary_uri": "",
+  "uri": "ch1437503.flespi.gw:38499"
+}
+```
 
-| Bloc | Méthode | URL | Statut test |
-|------|---------|-----|-------------|
-| **Channels** | GET | `/gw/channels/all` | ✅ Testé 22/08 |
-| **Channels** | POST | `/gw/channels` | ✅ Schema connu |
-| **Devices** | GET | `/gw/devices/all` | ✅ Testé (vide) |
-| **Devices** | POST | `/gw/devices` | ⚠️ Schema à valider (token expiré) |
-| **Devices** | GET | `/gw/devices/{id}` | ✅ Standard REST |
-| **Devices** | PUT | `/gw/devices/{id}` | ✅ Standard REST |
-| **Devices** | DELETE | `/gw/devices/{id}` | ✅ Standard REST |
-| **Messages** | GET | `/gw/devices/{id}/messages` | ✅ Standard REST |
-| **Telemetry** | GET | `/gw/devices/{id}/telemetry` | ✅ Standard REST |
-| **Commands** | POST | `/gw/devices/{id}/commands` | ⚠️ Schema à valider |
-| **Commands** | GET | `/gw/devices/{id}/commands` | ✅ Standard REST |
-| **MQTT realtime** | subscribe | `flespi/message/gw/channels/{id}` | ✅ Déjà câblé |
-| **MQTT commands** | subscribe | `flespi/command/gw/devices/{id}` | ⚠️ À câbler |
-
----
-
-## 9. ⚠️ Points bloquants / inconnus
-
-| Sujet | Problème | Action |
-|-------|----------|--------|
-| **Token Flespi expiré** | Token `DbWynFOHfs7Z...` révoqué entre 22 et 24/08 | Régénérer sur flespi.io |
-| **device_type_id Micodus** | Non confirmé (token expiré lors du test) | Tester avec nouveau token |
-| **Commande `engine.relay` MV730** | Dépend du firmware MV730 | Tester avec vrai traceur |
-| **Topic MQTT** | Flespi publie sur `flespi/message/...`, pas `devices/ingest/+` | Décider du canal à consommer |
-| **Protocole Trackbox vs Micodus** | 2 protocoles différents, payloads différents | Tracer un adaptateur |
-
----
-
-## 10. 🎯 Recommandations pour Evans
-
-1. **Avant de coder le Jalon 2** : faire un point sur Trackbox vs Micodus MV730. Quel protocole on garde ? On garde les 2 ?
-2. **Adapter le parseur** : si on supporte MV730, le payload aura des champs différents (notamment `engine.relay.status` pour la coupure).
-3. **Tester en réel** : récupérer un MV730 ou utiliser le simulateur Micodus officiel de Flespi (https://flespi.io/kb/micodus-protocol).
-4. **Garder MQTT** : pas besoin de webhook, on a déjà l'infra.
+### Script Node de test (reproductible)
+```javascript
+const mqtt = require("mqtt")
+const token = "SrKET...PGhsn"
+const client = mqtt.connect("mqtts://mqtt.flespi.io:8883", {
+  username: token, password: "", clientId: "audit-" + Date.now(), clean: true
+})
+client.on("connect", () => { client.subscribe("flespi/message/gw/channels/1437503") })
+client.on("message", (topic, msg) => { console.log(topic, msg.toString()) })
+```
 
 ---
 
-## 📎 Annexes
+## 7. Recapitulatif des tests
 
-- Documentation officielle : https://flespi.io/kb
+| Bloc | Endpoint/Topic | Teste | Resultat |
+|------|----------------|-------|----------|
+| Channels | GET /gw/channels/all | OK | 1 channel micodus (id 1437503) |
+| Devices | POST /gw/devices (dt=325) | NON | device configuration cannot be stored |
+| Devices | POST /gw/devices (dt=350) | OK | Device 8915498 cree |
+| Devices | DELETE /gw/devices/{id} | NON | ACL refusee (scope delete manquant) |
+| Messages | GET /gw/devices/{id}/messages | OK | Liste vide (pas de traceur) |
+| Telemetry | GET /gw/devices/{id}/telemetry | OK | 404 (pas de donnees) |
+| Commands | POST /gw/devices/{id}/commands | Schema OK | ACL refusee |
+| MQTT realtime | subscribe 5 topics | OK | Tous OK, payloads recus |
+
+---
+
+## 8. Points a clarifier avec Evans
+
+1. **device_type_id** : 325 (micodus protocol) ne marche pas en creation, il faut 350. Lequel utiliser ?
+2. **Scope token** : ajouter `delete` et `commands` sur flespi.io Settings Tokens
+3. **Vrai traceur MV730** : sans traceur, on ne peut pas tester le parsing reel des messages Micodus
+4. **Topic MQTT a consommer** : `flespi/message/gw/channels/1437503` (officiel Flespi) ou `devices/ingest/+` (custom Trackbox) ?
+
+---
+
+## 9. Recommandations
+
+1. **Avant Jalon 2** : tester avec un vrai traceur MV730 ou le simulateur Flespi officiel
+2. **Ajouter scopes** au token : `commands`, `delete`
+3. **Standardiser** sur les topics Flespi (`flespi/message/...`) plutot que custom
+4. **Documenter** le mapping entre champs Flespi (dot-notation) et notre modele interne
+
+---
+
+## Annexes
+
+- Documentation Flespi : https://flespi.io/kb
 - APIBox interactive : https://flespi.io/docs/
-- Protocole Micodus : https://flespi.io/kb/micodus-protocol
-- Vidéo intégration : https://youtu.be/nB2NVsyEfok
+- Video integration : https://youtu.be/nB2NVsyEfok
 
